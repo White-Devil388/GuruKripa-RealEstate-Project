@@ -1,26 +1,36 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, Suspense, lazy } from 'react';
 import { Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useLead } from '../context/LeadContext';
-
-// Import Public Website Pages
-import HomePage from '../pages/HomePage';
-import AboutPage from '../pages/AboutPage';
-import ProjectsPage from '../pages/ProjectsPage';
-import MediaPage from '../pages/MediaPage';
-import BlogPage from '../pages/BlogPage';
-import CareersPage from '../pages/CareersPage';
-import ContactPage from '../pages/ContactPage';
-import SiteVisitPage from '../pages/SiteVisitPage';
-import UserDashboardPage from '../pages/UserDashboardPage';
 import ProtectedRoutes from './protectedRoutes';
-
-// Import Agent & Admin Portal Components & Shells
-import LoginDashboard from '../components/auth/LoginDashboard';
-import AdminLoginDashboard from '../components/auth/AdminLoginDashboard';
-import SignupDashboard from '../components/auth/SignupDashboard';
-import ForgotPasswordDashboard from '../components/auth/ForgotPasswordDashboard';
 import { adminShell, beforeApprovalShell, afterApprovalShell } from './portalRoutes';
+
+// Lazy loaded Public Website Pages for better initial load performance
+const HomePage = lazy(() => import('../pages/HomePage'));
+const AboutPage = lazy(() => import('../pages/AboutPage'));
+const ProjectsPage = lazy(() => import('../pages/ProjectsPage'));
+const MediaPage = lazy(() => import('../pages/MediaPage'));
+const BlogPage = lazy(() => import('../pages/BlogPage'));
+const CareersPage = lazy(() => import('../pages/CareersPage'));
+const ContactPage = lazy(() => import('../pages/ContactPage'));
+const SiteVisitPage = lazy(() => import('../pages/SiteVisitPage'));
+const UserDashboardPage = lazy(() => import('../pages/UserDashboardPage'));
+
+// Lazy loaded Portal Auth Components
+const LoginDashboard = lazy(() => import('../components/auth/LoginDashboard'));
+const AdminLoginDashboard = lazy(() => import('../components/auth/AdminLoginDashboard'));
+const SignupDashboard = lazy(() => import('../components/auth/SignupDashboard'));
+const ForgotPasswordDashboard = lazy(() => import('../components/auth/ForgotPasswordDashboard'));
+
+// Modern, sleek loading fallback
+const PageLoader = () => (
+  <div className="flex items-center justify-center min-h-[50vh] w-full py-16">
+    <div className="relative flex items-center justify-center">
+      <div className="w-12 h-12 rounded-full border-2 border-accent/20 border-t-accent animate-spin" />
+      <span className="sr-only">Loading content...</span>
+    </div>
+  </div>
+);
 
 function AdminRouteGuard() {
   let adminUser = null;
@@ -78,43 +88,45 @@ const AppRoutes = () => {
   return (
     <>
       <RouteChangeHandler />
-      <AnimatePresence mode="wait">
-        <Routes location={location} key={location.pathname}>
-          {/* Public Website Routes */}
-          <Route path="/" element={<AnimatedPage><HomePage /></AnimatedPage>} />
-          <Route path="/home" element={<AnimatedPage><HomePage /></AnimatedPage>} />
-          <Route path="/about" element={<AnimatedPage><AboutPage /></AnimatedPage>} />
-          <Route path="/projects" element={<AnimatedPage><ProjectsPage /></AnimatedPage>} />
-          <Route path="/media" element={<AnimatedPage><MediaPage /></AnimatedPage>} />
-          <Route path="/blog" element={<AnimatedPage><BlogPage /></AnimatedPage>} />
-          <Route path="/careers" element={<AnimatedPage><CareersPage /></AnimatedPage>} />
-          <Route path="/contact" element={<AnimatedPage><ContactPage /></AnimatedPage>} />
-          <Route path="/site-visit" element={<AnimatedPage><SiteVisitPage /></AnimatedPage>} />
-          <Route
-            path="/dashboard"
-            element={(
-              <ProtectedRoutes>
-                <AnimatedPage><UserDashboardPage /></AnimatedPage>
-              </ProtectedRoutes>
-            )}
-          />
+      <Suspense fallback={<PageLoader />}>
+        <AnimatePresence mode="wait">
+          <Routes location={location} key={location.pathname}>
+            {/* Public Website Routes */}
+            <Route path="/" element={<AnimatedPage><HomePage /></AnimatedPage>} />
+            <Route path="/home" element={<AnimatedPage><HomePage /></AnimatedPage>} />
+            <Route path="/about" element={<AnimatedPage><AboutPage /></AnimatedPage>} />
+            <Route path="/projects" element={<AnimatedPage><ProjectsPage /></AnimatedPage>} />
+            <Route path="/media" element={<AnimatedPage><MediaPage /></AnimatedPage>} />
+            <Route path="/blog" element={<AnimatedPage><BlogPage /></AnimatedPage>} />
+            <Route path="/careers" element={<AnimatedPage><CareersPage /></AnimatedPage>} />
+            <Route path="/contact" element={<AnimatedPage><ContactPage /></AnimatedPage>} />
+            <Route path="/site-visit" element={<AnimatedPage><SiteVisitPage /></AnimatedPage>} />
+            <Route
+              path="/dashboard"
+              element={(
+                <ProtectedRoutes>
+                  <AnimatedPage><UserDashboardPage /></AnimatedPage>
+                </ProtectedRoutes>
+              )}
+            />
 
-          {/* Agent & Admin Portal Auth Routes */}
-          <Route path="/login" element={<LoginDashboard />} />
-          <Route path="/admin-login" element={<AdminLoginDashboard />} />
-          <Route path="/admin" element={<Navigate to="/admin-login" replace />} />
-          <Route path="/forgot-password" element={<ForgotPasswordDashboard />} />
-          <Route path="/signup" element={<SignupDashboard />} />
+            {/* Agent & Admin Portal Auth Routes */}
+            <Route path="/login" element={<LoginDashboard />} />
+            <Route path="/admin-login" element={<AdminLoginDashboard />} />
+            <Route path="/admin" element={<Navigate to="/admin-login" replace />} />
+            <Route path="/forgot-password" element={<ForgotPasswordDashboard />} />
+            <Route path="/signup" element={<SignupDashboard />} />
 
-          {/* Agent & Admin Portal App Shell Routes */}
-          <Route path="/admin/*" element={<AdminRouteGuard />} />
-          <Route path="/agent-before-approval/*" element={beforeApprovalShell} />
-          <Route path="/agent-after-approval/*" element={afterApprovalShell} />
+            {/* Agent & Admin Portal App Shell Routes */}
+            <Route path="/admin/*" element={<AdminRouteGuard />} />
+            <Route path="/agent-before-approval/*" element={beforeApprovalShell} />
+            <Route path="/agent-after-approval/*" element={afterApprovalShell} />
 
-          {/* Fallback */}
-          <Route path="*" element={<AnimatedPage><HomePage /></AnimatedPage>} />
-        </Routes>
-      </AnimatePresence>
+            {/* Fallback */}
+            <Route path="*" element={<AnimatedPage><HomePage /></AnimatedPage>} />
+          </Routes>
+        </AnimatePresence>
+      </Suspense>
     </>
   );
 };

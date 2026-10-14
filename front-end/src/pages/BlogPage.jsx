@@ -1,45 +1,72 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useLead } from '../context/LeadContext';
 import { useData } from '../context/DataContext';
 import { Search, ArrowRight, Sparkles } from 'lucide-react';
+import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
+import { useDebounce } from '../hooks/useDebounce';
 
 const BlogPage = () => {
   const { setActiveBlogModal, showToast } = useLead();
   const { blogs, blogsLoading, companyData } = useData();
 
   const [searchTerm, setSearchTerm] = useState('');
+  const debouncedSearchTerm = useDebounce(searchTerm, 250);
+
   const [selectedCat, setSelectedCat] = useState('All');
   const [newsletterEmail, setNewsletterEmail] = useState('');
   const [visibleCount, setVisibleCount] = useState(6);
   const PAGE_SIZE = 6;
 
-  const categories = ['All', ...(companyData.blogCategories && companyData.blogCategories.length > 0 ? companyData.blogCategories : ['Real Estate Trends', 'Legal & RERA', 'Investment Guides', 'Architecture & Design'])];
+  const categories = useMemo(() => [
+    'All',
+    ...(companyData.blogCategories && companyData.blogCategories.length > 0
+      ? companyData.blogCategories
+      : ['Real Estate Trends', 'Legal & RERA', 'Investment Guides', 'Architecture & Design'])
+  ], [companyData.blogCategories]);
 
-  const filteredPosts = blogs.filter((post) => {
-    if (searchTerm && !post.title.toLowerCase().includes(searchTerm.toLowerCase()) && !post.excerpt.toLowerCase().includes(searchTerm.toLowerCase())) {
-      return false;
-    }
-    if (selectedCat !== 'All' && post.category !== selectedCat) {
-      return false;
-    }
-    return true;
-  });
+  const filteredPosts = useMemo(() => {
+    const term = debouncedSearchTerm.trim().toLowerCase();
+    return blogs.filter((post) => {
+      if (term && !post.title.toLowerCase().includes(term) && !post.excerpt.toLowerCase().includes(term)) {
+        return false;
+      }
+      if (selectedCat !== 'All' && post.category !== selectedCat) {
+        return false;
+      }
+      return true;
+    });
+  }, [blogs, debouncedSearchTerm, selectedCat]);
 
-  const visiblePosts = filteredPosts.slice(0, visibleCount);
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [debouncedSearchTerm, selectedCat]);
+
+  const visiblePosts = useMemo(() => {
+    return filteredPosts.slice(0, visibleCount);
+  }, [filteredPosts, visibleCount]);
+
   const hasMorePosts = visibleCount < filteredPosts.length;
 
-  React.useEffect(() => {
-    setVisibleCount(PAGE_SIZE);
-  }, [searchTerm, selectedCat]);
+  const handleLoadMore = useCallback(() => {
+    setVisibleCount((prev) => Math.min(prev + PAGE_SIZE, filteredPosts.length));
+  }, [filteredPosts.length, PAGE_SIZE]);
 
-  const featuredPost = blogs.find((p) => p.featured) || blogs[0];
+  const infiniteScrollRef = useInfiniteScroll(handleLoadMore, hasMorePosts, false);
 
-  const handleNewsletterSubmit = (e) => {
+  const featuredPost = useMemo(() => {
+    return blogs.find((p) => p.featured) || blogs[0];
+  }, [blogs]);
+
+  const handleOpenBlog = useCallback((post) => {
+    setActiveBlogModal(post);
+  }, [setActiveBlogModal]);
+
+  const handleNewsletterSubmit = useCallback((e) => {
     e.preventDefault();
     if (!newsletterEmail) return;
     showToast(`Subscribed ${newsletterEmail} to Gurukripa Real Estate Digest`, 'success');
     setNewsletterEmail('');
-  };
+  }, [newsletterEmail, showToast]);
 
   return (
     <div className="pt-36 sm:pt-40 pb-28 space-y-20">
@@ -173,20 +200,21 @@ const BlogPage = () => {
             )}
 
             {hasMorePosts && (
-              <div className="col-span-full flex justify-center pt-4">
+              <div ref={infiniteScrollRef} className="col-span-full flex flex-col items-center justify-center pt-6 pb-2 gap-3">
                 <button
                   type="button"
-                  onClick={() => setVisibleCount((prev) => Math.min(prev + PAGE_SIZE, filteredPosts.length))}
+                  onClick={handleLoadMore}
                   className="btn-gold px-7 py-3 text-sm font-bold"
                 >
                   Load More Articles
                 </button>
+                <span className="text-xs text-ink-muted">Scroll down or click to load more</span>
               </div>
             )}
 
             {!hasMorePosts && filteredPosts.length > 0 && (
-              <div className="col-span-full text-center text-sm text-ink-muted pt-2">
-                All articles loaded.
+              <div className="col-span-full text-center text-sm text-ink-muted pt-4">
+                All articles loaded ({filteredPosts.length} total).
               </div>
             )}
           </div>

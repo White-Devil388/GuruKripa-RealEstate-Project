@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useDebounce } from '../hooks/useDebounce';
+import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import { useLead } from '../context/LeadContext';
 import { useProjects } from '../context/ProjectContext';
 import { useAuth } from '../context/AuthContext';
@@ -193,50 +195,70 @@ const AdminDashboardPage = ({ initialTab = 'overview', isEmbedded = true }) => {
     }
   };
 
-  // Filtered Leads
-  const filteredLeads = leads.filter((lead) => {
-    if (filterType !== 'All' && lead.type !== filterType) return false;
-    if (filterStatus !== 'All' && lead.status !== filterStatus) return false;
-    if (searchTerm) {
-      const q = searchTerm.toLowerCase();
-      const matchName = lead.name?.toLowerCase().includes(q);
-      const matchEmail = lead.email?.toLowerCase().includes(q);
-      const matchId = lead.id?.toLowerCase().includes(q);
-      const matchPhone = lead.phone?.toLowerCase().includes(q);
-      if (!matchName && !matchEmail && !matchId && !matchPhone) return false;
-    }
-    return true;
-  });
+  const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
-  const visibleLeads = filteredLeads.slice(0, leadVisibleCount);
+  // Filtered Leads
+  const filteredLeads = useMemo(() => {
+    const q = debouncedSearchTerm.trim().toLowerCase();
+    return leads.filter((lead) => {
+      if (filterType !== 'All' && lead.type !== filterType) return false;
+      if (filterStatus !== 'All' && lead.status !== filterStatus) return false;
+      if (q) {
+        const matchName = lead.name?.toLowerCase().includes(q);
+        const matchEmail = lead.email?.toLowerCase().includes(q);
+        const matchId = lead.id?.toLowerCase().includes(q);
+        const matchPhone = lead.phone?.toLowerCase().includes(q);
+        if (!matchName && !matchEmail && !matchId && !matchPhone) return false;
+      }
+      return true;
+    });
+  }, [leads, filterType, filterStatus, debouncedSearchTerm]);
+
+  const visibleLeads = useMemo(() => {
+    return filteredLeads.slice(0, leadVisibleCount);
+  }, [filteredLeads, leadVisibleCount]);
   const hasMoreLeads = leadVisibleCount < filteredLeads.length;
 
   // Filtered Projects
-  const filteredProjects = projects.filter((proj) => {
-    if (projectCategoryFilter !== 'All' && proj.category !== projectCategoryFilter) return false;
-    if (projectStatusFilter !== 'All' && proj.status !== projectStatusFilter) return false;
-    return true;
-  });
+  const filteredProjects = useMemo(() => {
+    return projects.filter((proj) => {
+      if (projectCategoryFilter !== 'All' && proj.category !== projectCategoryFilter) return false;
+      if (projectStatusFilter !== 'All' && proj.status !== projectStatusFilter) return false;
+      return true;
+    });
+  }, [projects, projectCategoryFilter, projectStatusFilter]);
 
-  const visibleProjects = filteredProjects.slice(0, projectVisibleCount);
+  const visibleProjects = useMemo(() => {
+    return filteredProjects.slice(0, projectVisibleCount);
+  }, [filteredProjects, projectVisibleCount]);
   const hasMoreProjects = projectVisibleCount < filteredProjects.length;
 
-  const visibleVisits = mockVisits
-    .filter(v => visitStatusFilter === 'All' || v.status === visitStatusFilter)
-    .slice(0, visitVisibleCount);
-  const hasMoreVisits = visitVisibleCount < mockVisits.filter(v => visitStatusFilter === 'All' || v.status === visitStatusFilter).length;
+  const filteredVisits = useMemo(() => {
+    return mockVisits.filter(v => visitStatusFilter === 'All' || v.status === visitStatusFilter);
+  }, [mockVisits, visitStatusFilter]);
 
-  const visibleBlogs = blogs.slice(0, blogVisibleCount);
+  const visibleVisits = useMemo(() => {
+    return filteredVisits.slice(0, visitVisibleCount);
+  }, [filteredVisits, visitVisibleCount]);
+  const hasMoreVisits = visitVisibleCount < filteredVisits.length;
+
+  const visibleBlogs = useMemo(() => {
+    return blogs.slice(0, blogVisibleCount);
+  }, [blogs, blogVisibleCount]);
   const hasMoreBlogs = blogVisibleCount < blogs.length;
 
-  const visibleMedia = mediaItems.slice(0, mediaVisibleCount);
+  const visibleMedia = useMemo(() => {
+    return mediaItems.slice(0, mediaVisibleCount);
+  }, [mediaItems, mediaVisibleCount]);
   const hasMoreMedia = mediaVisibleCount < mediaItems.length;
 
-  const brochureRequests = leads.filter((lead) => lead.type === 'Brochure Request');
+  const brochureRequests = useMemo(() => {
+    return leads.filter((lead) => lead.type === 'Brochure Request');
+  }, [leads]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     setLeadVisibleCount(LIST_PAGE_SIZE);
-  }, [searchTerm, filterType, filterStatus]);
+  }, [debouncedSearchTerm, filterType, filterStatus]);
 
   React.useEffect(() => {
     setProjectVisibleCount(LIST_PAGE_SIZE);

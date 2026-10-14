@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useLead } from '../context/LeadContext';
 import { useData } from '../context/DataContext';
 import { Play, Maximize2 } from 'lucide-react';
+import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 
 const MediaPage = () => {
   const { setActiveLightboxMedia } = useLead();
@@ -11,18 +12,38 @@ const MediaPage = () => {
   const [visibleCount, setVisibleCount] = useState(6);
   const PAGE_SIZE = 6;
 
-  const categories = ['All', ...(companyData.mediaCategories && companyData.mediaCategories.length > 0 ? companyData.mediaCategories : ['Project Images', 'Videos', 'Events', 'Company Activities', 'News & Press'])];
+  const categories = useMemo(() => [
+    'All',
+    ...(companyData.mediaCategories && companyData.mediaCategories.length > 0
+      ? companyData.mediaCategories
+      : ['Project Images', 'Videos', 'Events', 'Company Activities', 'News & Press'])
+  ], [companyData.mediaCategories]);
 
-  const filteredMedia = selectedCat === 'All' 
-    ? mediaItems 
-    : mediaItems.filter((item) => item.category === selectedCat);
+  const filteredMedia = useMemo(() => {
+    return selectedCat === 'All'
+      ? mediaItems
+      : mediaItems.filter((item) => item.category === selectedCat);
+  }, [mediaItems, selectedCat]);
 
-  const visibleMedia = filteredMedia.slice(0, visibleCount);
-  const hasMoreMedia = visibleCount < filteredMedia.length;
-
-  React.useEffect(() => {
+  useEffect(() => {
     setVisibleCount(PAGE_SIZE);
   }, [selectedCat]);
+
+  const visibleMedia = useMemo(() => {
+    return filteredMedia.slice(0, visibleCount);
+  }, [filteredMedia, visibleCount]);
+
+  const hasMoreMedia = visibleCount < filteredMedia.length;
+
+  const handleLoadMore = useCallback(() => {
+    setVisibleCount((prev) => Math.min(prev + PAGE_SIZE, filteredMedia.length));
+  }, [filteredMedia.length, PAGE_SIZE]);
+
+  const infiniteScrollRef = useInfiniteScroll(handleLoadMore, hasMoreMedia, false);
+
+  const handleSelectMedia = useCallback((item) => {
+    setActiveLightboxMedia(item);
+  }, [setActiveLightboxMedia]);
 
   return (
     <div className="page-inner">
@@ -74,7 +95,7 @@ const MediaPage = () => {
             {visibleMedia.map((item) => (
               <div
                 key={item.id || item._id}
-                onClick={() => setActiveLightboxMedia(item)}
+                onClick={() => handleSelectMedia(item)}
                 className="glass-card overflow-hidden cursor-pointer group flex flex-col justify-between border border-accent/20 hover:border-accent/60 bg-surface"
               >
                 <div className="relative h-72 overflow-hidden">
@@ -119,20 +140,21 @@ const MediaPage = () => {
             )}
 
             {hasMoreMedia && (
-              <div className="col-span-full flex justify-center pt-4">
+              <div ref={infiniteScrollRef} className="col-span-full flex flex-col items-center justify-center pt-6 pb-2 gap-3">
                 <button
                   type="button"
-                  onClick={() => setVisibleCount((prev) => Math.min(prev + PAGE_SIZE, filteredMedia.length))}
+                  onClick={handleLoadMore}
                   className="btn-gold px-7 py-3 text-sm font-bold"
                 >
                   Load More Media
                 </button>
+                <span className="text-xs text-ink-muted">Scroll down or click to load more</span>
               </div>
             )}
 
             {!hasMoreMedia && filteredMedia.length > 0 && (
-              <div className="col-span-full text-center text-sm text-ink-muted pt-2">
-                All media loaded.
+              <div className="col-span-full text-center text-sm text-ink-muted pt-4">
+                All media loaded ({filteredMedia.length} total).
               </div>
             )}
           </div>

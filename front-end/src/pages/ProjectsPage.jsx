@@ -1,9 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useLead } from '../context/LeadContext';
 import { useProjects } from '../context/ProjectContext';
 import { useData } from '../context/DataContext';
 import { useSearchParams } from 'react-router-dom';
 import { Search, MapPin, Grid, Map, Calendar, ArrowRight, SlidersHorizontal, Check } from 'lucide-react';
+import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
+import { useDebounce } from '../hooks/useDebounce';
 
 const normalizeProjectStatus = (value) => {
   if (typeof value !== 'string') return '';
@@ -54,12 +56,16 @@ const ProjectsPage = () => {
   const [searchParams] = useSearchParams();
 
   const [searchTerm, setSearchTerm] = useState('');
+  const debouncedSearchTerm = useDebounce(searchTerm, 250);
+
   const [selectedLocation, setSelectedLocation] = useState(searchParams.get('city') || 'All');
   const [selectedCategory, setSelectedCategory] = useState(searchParams.get('category') || 'All');
   const [selectedStatus, setSelectedStatus] = useState(searchParams.get('status') || 'All');
   const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'map'
   const [visibleCount, setVisibleCount] = useState(6);
   const PAGE_SIZE = 6;
+
+  const searchInputRef = useRef(null);
 
   useEffect(() => {
     const statusParam = searchParams.get('status');
@@ -71,45 +77,77 @@ const ProjectsPage = () => {
 
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
-  }, [searchTerm, selectedLocation, selectedCategory, selectedStatus]);
+  }, [debouncedSearchTerm, selectedLocation, selectedCategory, selectedStatus]);
 
-  const locationOptions = ['All', ...new Set(projects.map((project) => project.city).filter(Boolean))];
-  const categoryOptions = ['All', ...(companyData.projectCategories && companyData.projectCategories.length > 0
-    ? companyData.projectCategories
-    : [...new Set(projects.map((project) => project.category).filter(Boolean))])];
-  const statusOptions = ['All', ...(companyData.projectStatuses && companyData.projectStatuses.length > 0
-    ? companyData.projectStatuses
-    : [...new Set(projects.map((project) => project.status).filter(Boolean))])];
+  const locationOptions = useMemo(() => [
+    'All',
+    ...new Set(projects.map((project) => project.city).filter(Boolean))
+  ], [projects]);
 
-  const filteredProjects = projects.filter((project) => {
-    const projectName = project?.name?.toLowerCase?.() || '';
-    const projectLocation = project?.location?.toLowerCase?.() || '';
+  const categoryOptions = useMemo(() => [
+    'All',
+    ...(companyData.projectCategories && companyData.projectCategories.length > 0
+      ? companyData.projectCategories
+      : [...new Set(projects.map((project) => project.category).filter(Boolean))])
+  ], [companyData.projectCategories, projects]);
 
-    if (searchTerm && !projectName.includes(searchTerm.toLowerCase()) && !projectLocation.includes(searchTerm.toLowerCase())) {
-      return false;
-    }
+  const statusOptions = useMemo(() => [
+    'All',
+    ...(companyData.projectStatuses && companyData.projectStatuses.length > 0
+      ? companyData.projectStatuses
+      : [...new Set(projects.map((project) => project.status).filter(Boolean))])
+  ], [companyData.projectStatuses, projects]);
 
-    if (selectedLocation !== 'All') {
-      const selectedLocationValue = selectedLocation.toLowerCase();
-      const matchesCity = (project.city || '').toLowerCase().includes(selectedLocationValue);
-      const matchesLocation = projectLocation.includes(selectedLocationValue);
+  const filteredProjects = useMemo(() => {
+    const term = debouncedSearchTerm.trim().toLowerCase();
 
-      if (!matchesCity && !matchesLocation) {
+    return projects.filter((project) => {
+      const projectName = project?.name?.toLowerCase?.() || '';
+      const projectLocation = project?.location?.toLowerCase?.() || '';
+
+      if (term && !projectName.includes(term) && !projectLocation.includes(term)) {
         return false;
       }
-    }
 
-    if (selectedCategory !== 'All' && project.category !== selectedCategory) {
-      return false;
-    }
-    if (!matchesProjectStatus(project.status, selectedStatus)) {
-      return false;
-    }
-    return true;
-  });
+      if (selectedLocation !== 'All') {
+        const selectedLocationValue = selectedLocation.toLowerCase();
+        const matchesCity = (project.city || '').toLowerCase().includes(selectedLocationValue);
+        const matchesLocation = projectLocation.includes(selectedLocationValue);
 
-  const visibleProjects = filteredProjects.slice(0, visibleCount);
+        if (!matchesCity && !matchesLocation) {
+          return false;
+        }
+      }
+
+      if (selectedCategory !== 'All' && project.category !== selectedCategory) {
+        return false;
+      }
+      if (!matchesProjectStatus(project.status, selectedStatus)) {
+        return false;
+      }
+      return true;
+    });
+  }, [projects, debouncedSearchTerm, selectedLocation, selectedCategory, selectedStatus]);
+
+  const visibleProjects = useMemo(() => {
+    return filteredProjects.slice(0, visibleCount);
+  }, [filteredProjects, visibleCount]);
+
   const hasMoreProjects = visibleCount < filteredProjects.length;
+
+  const handleLoadMore = useCallback(() => {
+    setVisibleCount((prev) => Math.min(prev + PAGE_SIZE, filteredProjects.length));
+  }, [filteredProjects.length, PAGE_SIZE]);
+
+  const infiniteScrollRef = useInfiniteScroll(handleLoadMore, hasMoreProjects, false);
+
+  const handleOpenModal = useCallback((project) => {
+    setActiveProjectModal(project);
+  }, [setActiveProjectModal]);
+
+  const handleOpenSiteVisit = useCallback((project) => {
+    openSiteVisitForProject(project);
+  }, [openSiteVisitForProject]);
 
   return (
     <div className="page-inner">
@@ -346,14 +384,14 @@ const ProjectsPage = () => {
 
                         <div className="flex items-center gap-3 pt-1">
                           <button
-                            onClick={() => setActiveProjectModal(project)}
+                            onClick={() => handleOpenModal(project)}
                             className="btn-secondary flex-1 text-xs py-3 font-semibold"
                           >
                             <span>View Details</span>
                           </button>
 
                           <button
-                            onClick={() => openSiteVisitForProject(project)}
+                            onClick={() => handleOpenSiteVisit(project)}
                             className="btn-gold flex-1 text-xs py-3 font-bold"
                           >
                             <Calendar className="w-3.5 h-3.5" />
@@ -365,21 +403,23 @@ const ProjectsPage = () => {
                   </div>
                 ))}
 
+                {/* Infinite scroll sentinel & manual fallback button */}
                 {hasMoreProjects && (
-                  <div className="col-span-full flex justify-center pt-4">
+                  <div ref={infiniteScrollRef} className="col-span-full flex flex-col items-center justify-center pt-6 pb-2 gap-3">
                     <button
                       type="button"
-                      onClick={() => setVisibleCount((prev) => Math.min(prev + PAGE_SIZE, filteredProjects.length))}
+                      onClick={handleLoadMore}
                       className="btn-gold px-7 py-3 text-sm font-bold"
                     >
                       Load More Projects
                     </button>
+                    <span className="text-xs text-ink-muted">Scroll down or click to load more</span>
                   </div>
                 )}
 
                 {!hasMoreProjects && filteredProjects.length > 0 && (
-                  <div className="col-span-full text-center text-sm text-ink-muted pt-2">
-                    All projects loaded.
+                  <div className="col-span-full text-center text-sm text-ink-muted pt-4">
+                    All projects loaded ({filteredProjects.length} total).
                   </div>
                 )}
               </>
