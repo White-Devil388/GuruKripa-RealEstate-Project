@@ -102,6 +102,7 @@ const AppRoutes = () => {
           {/* Agent & Admin Portal Auth Routes */}
           <Route path="/login" element={<LoginDashboard />} />
           <Route path="/admin-login" element={<AdminLoginDashboard />} />
+          <Route path="/admin" element={<Navigate to="/admin-login" replace />} />
           <Route path="/forgot-password" element={<ForgotPasswordDashboard />} />
           <Route path="/signup" element={<SignupDashboard />} />
 
