@@ -1,6 +1,6 @@
 export async function request(path, options = {}) {
   const token = localStorage.getItem('northstar_token') || sessionStorage.getItem('northstar_token')
-  const apiBaseUrl = import.meta.env.VITE_AGENT_API_URL || 'http://localhost:5001/api'
+  const apiBaseUrl = import.meta.env.VITE_AGENT_API_URL || 'https://gurukripa-realestate-project.onrender.com/api'
   const isFormData = options.body instanceof FormData
   const response = await fetch(`${apiBaseUrl}${path}`, {
     headers: { ...(isFormData ? {} : { 'Content-Type': 'application/json' }), ...(token ? { Authorization: `Bearer ${token}` } : {}), ...options.headers },
